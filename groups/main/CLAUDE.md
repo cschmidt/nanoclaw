@@ -205,6 +205,66 @@ You can read and write to `/workspace/project/groups/global/CLAUDE.md` for facts
 
 ---
 
+## Daily News Briefing
+
+A scheduled task runs daily at 7:00 AM Pacific to compile a news briefing from these sources:
+
+| Source | URL | Focus |
+|--------|-----|-------|
+| The Economist | https://www.economist.com/ | World affairs, economics, analysis |
+| Reuters | https://www.reuters.com/ | Breaking international news |
+| BBC News | http://www.bbc.co.uk/news/ | World news, UK perspective |
+| Google News | http://news.google.com/ | Aggregated top stories |
+| Al Jazeera | http://english.aljazeera.net/ | International news, Middle East |
+| Vancouver Tech Journal | https://www.vantechjournal.com/ | Local Vancouver tech scene |
+| Seeking Alpha | https://seekingalpha.com/ | Markets and investing |
+
+### Fetching Strategy
+
+**IMPORTANT: You MUST use `agent-browser` (via Bash) for sites that block bots. WebFetch WILL fail on these — do not attempt it.**
+
+Step-by-step for each source:
+
+1. **The Economist** — use `agent-browser`
+   ```bash
+   agent-browser open https://www.economist.com/
+   agent-browser snapshot
+   ```
+2. **Reuters** — use `agent-browser`
+   ```bash
+   agent-browser open https://www.reuters.com/
+   agent-browser snapshot
+   ```
+3. **Vancouver Tech Journal** — use `agent-browser`
+   ```bash
+   agent-browser open https://www.vantechjournal.com/
+   agent-browser snapshot
+   ```
+4. **Google News** — use `agent-browser` (blocks WebFetch)
+   ```bash
+   agent-browser open https://news.google.com/
+   agent-browser snapshot
+   ```
+5. **BBC News** — use WebFetch: `https://www.bbc.co.uk/news`
+6. **Al Jazeera** — use WebFetch: `https://english.aljazeera.net/`
+7. **Seeking Alpha** — use WebFetch: `https://seekingalpha.com/`
+
+After each `agent-browser open`, use `agent-browser snapshot` to read the page content. Close the browser with `agent-browser close` between sites to free memory.
+
+### Briefing Format
+- Balanced overview: world news, business, and tech
+- Summarize the top 10-15 stories across all sources
+- Group by theme (World, Business/Markets, Tech, Local)
+- Send via `send_message` to the main channel
+- Keep it concise — this is a WhatsApp message, not an essay
+
+### Preferences
+(Updated based on user feedback — modify this section when the user asks for changes)
+- Coverage: Balanced across all topics
+- No specific topic exclusions yet
+
+---
+
 ## Scheduling for Other Groups
 
 When scheduling tasks for other groups, use the `target_group_jid` parameter with the group's JID from `registered_groups.json`:
