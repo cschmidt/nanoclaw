@@ -252,11 +252,28 @@ Step-by-step for each source:
 After each `agent-browser open`, use `agent-browser snapshot` to read the page content. Close the browser with `agent-browser close` between sites to free memory.
 
 ### Briefing Format
-- Balanced overview: world news, business, and tech
-- Summarize the top 10-15 stories across all sources
-- Group by theme (World, Business/Markets, Tech, Local)
-- Send via `send_message` to the main channel
-- Keep it concise — this is a WhatsApp message, not an essay
+
+Send a single message via `send_message` structured like this:
+
+```
+*🌍 World*
+• Story headline — 1-2 sentence summary (Source)
+• ...
+
+*💼 Business & Markets*
+• ...
+
+*💻 Tech*
+• ...
+
+*📍 Local (Vancouver)*
+• ...
+```
+
+Guidelines:
+- 10-15 stories total, grouped by theme
+- Each story gets a bold headline and 1-2 sentence summary with the source in parentheses
+- Aim for ~2000-3000 characters total — detailed enough to be informative, short enough for WhatsApp
 
 ### Preferences
 (Updated based on user feedback — modify this section when the user asks for changes)

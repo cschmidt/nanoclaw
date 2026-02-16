@@ -76,7 +76,7 @@ RUN mkdir -p /workspace/group /workspace/global /workspace/extra /workspace/ipc/
 # Create entrypoint script
 # Secrets are passed via stdin JSON — temp file is deleted immediately after Node reads it
 # Follow-up messages arrive via IPC files in /workspace/ipc/input/
-RUN printf '#!/bin/bash\nset -e\nif [ -d /workspace/extra/gcloud ]; then\n  cp -r /workspace/extra/gcloud /tmp/gcloud-config\n  export CLOUDSDK_CONFIG=/tmp/gcloud-config\nfi\n# Make skills discoverable by Claude Code SDK\nmkdir -p /workspace/group/.claude\nln -sf /app/skills /workspace/group/.claude/skills\n# Clean stale Chromium profile locks (different container hostname each run)\nrm -f /workspace/group/.browser-profile/Singleton* 2>/dev/null || true\ncd /app && npx tsc --outDir /tmp/dist 2>&1 >&2\nln -s /app/node_modules /tmp/dist/node_modules\nchmod -R a-w /tmp/dist\ncat > /tmp/input.json\nnode /tmp/dist/index.js < /tmp/input.json\n' > /app/entrypoint.sh && chmod +x /app/entrypoint.sh
+RUN printf '#!/bin/bash\nset -e\nif [ -d /workspace/extra/gcloud ]; then\n  cp -r /workspace/extra/gcloud /tmp/gcloud-config\n  export CLOUDSDK_CONFIG=/tmp/gcloud-config\nfi\n# Clean stale Chromium profile locks (different container hostname each run)\nrm -f /workspace/group/.browser-profile/Singleton* 2>/dev/null || true\ncd /app && npx tsc --outDir /tmp/dist 2>&1 >&2\nln -s /app/node_modules /tmp/dist/node_modules\nchmod -R a-w /tmp/dist\ncat > /tmp/input.json\nnode /tmp/dist/index.js < /tmp/input.json\n' > /app/entrypoint.sh && chmod +x /app/entrypoint.sh
 
 # Set ownership to node user (non-root) for writable directories
 RUN chown -R node:node /workspace && chmod 777 /home/node
