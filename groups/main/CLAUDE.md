@@ -277,8 +277,72 @@ Guidelines:
 
 ### Preferences
 (Updated based on user feedback — modify this section when the user asks for changes)
-- Coverage: Balanced across all topics
-- No specific topic exclusions yet
+- *High interest topics*: Fusion energy progress, solid state batteries in EVs, AI developments
+- *Skip*: Sports (unless truly headline-worthy like major upsets or records)
+- Coverage: Focus on topics of special interest while maintaining world news coverage
+
+---
+
+## Google Contacts (People API)
+
+You can read and create Google Contacts via the People API using `curl` with bearer tokens.
+
+### Getting a token
+
+```bash
+TOKEN=$(gcloud auth application-default print-access-token)
+```
+
+**IMPORTANT:** Every People API request MUST include the quota project header:
+```
+-H "x-goog-user-project: schmidtdisturber-nanoclaw"
+```
+
+### List contacts
+
+```bash
+curl -s -H "Authorization: Bearer $TOKEN" -H "x-goog-user-project: schmidtdisturber-nanoclaw" \
+  "https://people.googleapis.com/v1/people/me/connections?personFields=names,emailAddresses,phoneNumbers&pageSize=100" \
+  | jq '.connections[] | {name: .names[0].displayName, email: .emailAddresses[0]?.value, phone: .phoneNumbers[0]?.value}'
+```
+
+Use `pageToken` from the response for pagination if needed.
+
+### Search contacts
+
+```bash
+curl -s -H "Authorization: Bearer $TOKEN" -H "x-goog-user-project: schmidtdisturber-nanoclaw" \
+  "https://people.googleapis.com/v1/people:searchContacts?query=SEARCH_TERM&readMask=names,emailAddresses,phoneNumbers&pageSize=10"
+```
+
+### Get contact details
+
+```bash
+curl -s -H "Authorization: Bearer $TOKEN" -H "x-goog-user-project: schmidtdisturber-nanoclaw" \
+  "https://people.googleapis.com/v1/RESOURCE_NAME?personFields=names,emailAddresses,phoneNumbers,addresses,organizations,birthdays"
+```
+
+Replace `RESOURCE_NAME` with the contact's resource name (e.g., `people/c1234567890`).
+
+### Create a contact
+
+```bash
+curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "x-goog-user-project: schmidtdisturber-nanoclaw" \
+  -H "Content-Type: application/json" \
+  "https://people.googleapis.com/v1/people:createContact" \
+  -d '{
+    "names": [{"givenName": "First", "familyName": "Last"}],
+    "emailAddresses": [{"value": "email@example.com"}],
+    "phoneNumbers": [{"value": "+1234567890"}]
+  }'
+```
+
+### Notes
+
+- Tokens are short-lived (~1 hour) but `gcloud auth application-default print-access-token` auto-refreshes them
+- The `jq` tool is available in the container for parsing JSON responses
+- Always use `personFields` or `readMask` to specify which fields to return
+- Always include `-H "x-goog-user-project: schmidtdisturber-nanoclaw"` — without it, the API returns a 403
 
 ---
 
