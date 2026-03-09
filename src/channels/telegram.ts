@@ -1,7 +1,7 @@
 import { Bot } from 'grammy';
 import { convert as toMarkdownV2 } from 'telegram-markdown-v2';
 
-import { ASSISTANT_NAME, TRIGGER_PATTERN } from '../config.js';
+import { ASSISTANT_NAME, TELEGRAM_BOT_TOKEN, TRIGGER_PATTERN } from '../config.js';
 import { logger } from '../logger.js';
 import {
   Channel,
@@ -9,6 +9,14 @@ import {
   OnInboundMessage,
   RegisteredGroup,
 } from '../types.js';
+import { registerChannel, ChannelOpts } from './registry.js';
+
+// Self-register with the channel registry.
+// Factory returns null when token is missing → channel is skipped.
+registerChannel('telegram', (opts: ChannelOpts) => {
+  if (!TELEGRAM_BOT_TOKEN) return null;
+  return new TelegramChannel(TELEGRAM_BOT_TOKEN, opts);
+});
 
 export interface TelegramChannelOpts {
   onMessage: OnInboundMessage;

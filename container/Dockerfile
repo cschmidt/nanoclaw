@@ -7,6 +7,7 @@ FROM node:22-slim
 RUN apt-get update && apt-get install -y \
     chromium \
     fonts-liberation \
+    fonts-noto-cjk \
     fonts-noto-color-emoji \
     libgbm1 \
     libnss3 \
@@ -23,31 +24,11 @@ RUN apt-get update && apt-get install -y \
     libxshmfence1 \
     curl \
     git \
-    gnupg \
-    python3 \
-    python3-pip \
-    python3-venv \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install Google Cloud CLI
-RUN echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" \
-      | tee /etc/apt/sources.list.d/google-cloud-sdk.list \
-    && curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg \
-      | gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg \
-    && apt-get update && apt-get install -y google-cloud-cli \
     && rm -rf /var/lib/apt/lists/*
 
 # Set Chromium path for agent-browser
 ENV AGENT_BROWSER_EXECUTABLE_PATH=/usr/bin/chromium
 ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
-
-# Stealth: bypass bot detection for headless browsing
-# - Real Chrome UA (matches container's Chromium 144 version)
-# - Disable AutomationControlled to remove navigator.webdriver flag
-ENV AGENT_BROWSER_USER_AGENT="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36"
-ENV AGENT_BROWSER_ARGS="--disable-blink-features=AutomationControlled"
-# Persistent browser profile on mounted volume — cookies/state survive between runs
-ENV AGENT_BROWSER_PROFILE=/workspace/group/.browser-profile
 
 # Install agent-browser and claude-code globally
 RUN npm install -g agent-browser @anthropic-ai/claude-code
@@ -64,9 +45,6 @@ RUN npm install
 # Copy source code
 COPY agent-runner/ ./
 
-# Copy skills (Claude Code discovers these via .claude/skills/ in workspace)
-COPY skills/ /app/skills/
-
 # Build TypeScript
 RUN npm run build
 
@@ -74,9 +52,10 @@ RUN npm run build
 RUN mkdir -p /workspace/group /workspace/global /workspace/extra /workspace/ipc/messages /workspace/ipc/tasks /workspace/ipc/input
 
 # Create entrypoint script
-# Secrets are passed via stdin JSON — temp file is deleted immediately after Node reads it
+# Container input (prompt, group info) is passed via stdin JSON.
+# Credentials are injected by the host's credential proxy — never passed here.
 # Follow-up messages arrive via IPC files in /workspace/ipc/input/
-RUN printf '#!/bin/bash\nset -e\nif [ -d /workspace/extra/gcloud ]; then\n  cp -r /workspace/extra/gcloud /tmp/gcloud-config\n  export CLOUDSDK_CONFIG=/tmp/gcloud-config\nfi\n# Clean stale Chromium profile locks (different container hostname each run)\nrm -f /workspace/group/.browser-profile/Singleton* 2>/dev/null || true\ncd /app && npx tsc --outDir /tmp/dist 2>&1 >&2\nln -s /app/node_modules /tmp/dist/node_modules\nchmod -R a-w /tmp/dist\ncat > /tmp/input.json\nnode /tmp/dist/index.js < /tmp/input.json\n' > /app/entrypoint.sh && chmod +x /app/entrypoint.sh
+RUN printf '#!/bin/bash\nset -e\ncd /app && npx tsc --outDir /tmp/dist 2>&1 >&2\nln -s /app/node_modules /tmp/dist/node_modules\nchmod -R a-w /tmp/dist\ncat > /tmp/input.json\nnode /tmp/dist/index.js < /tmp/input.json\n' > /app/entrypoint.sh && chmod +x /app/entrypoint.sh
 
 # Set ownership to node user (non-root) for writable directories
 RUN chown -R node:node /workspace && chmod 777 /home/node
