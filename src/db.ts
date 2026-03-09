@@ -551,6 +551,21 @@ export function setRegisteredGroup(
   if (!isValidGroupFolder(group.folder)) {
     throw new Error(`Invalid group folder "${group.folder}" for JID ${jid}`);
   }
+
+  // If another JID already owns this folder, carry forward its containerConfig
+  // so channel migrations (e.g. WhatsApp → Telegram) don't lose mount config.
+  let containerConfig = group.containerConfig;
+  if (!containerConfig) {
+    const existing = db
+      .prepare(
+        'SELECT container_config FROM registered_groups WHERE folder = ? AND jid != ?',
+      )
+      .get(group.folder, jid) as { container_config: string | null } | undefined;
+    if (existing?.container_config) {
+      containerConfig = JSON.parse(existing.container_config);
+    }
+  }
+
   db.prepare(
     `INSERT OR REPLACE INTO registered_groups (jid, name, folder, trigger_pattern, added_at, container_config, requires_trigger)
      VALUES (?, ?, ?, ?, ?, ?, ?)`,
@@ -560,7 +575,7 @@ export function setRegisteredGroup(
     group.folder,
     group.trigger,
     group.added_at,
-    group.containerConfig ? JSON.stringify(group.containerConfig) : null,
+    containerConfig ? JSON.stringify(containerConfig) : null,
     group.requiresTrigger === undefined ? 1 : group.requiresTrigger ? 1 : 0,
   );
 }

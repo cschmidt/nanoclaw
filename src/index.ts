@@ -6,8 +6,11 @@ import {
   IDLE_TIMEOUT,
   MAIN_GROUP_FOLDER,
   POLL_INTERVAL,
+  TELEGRAM_BOT_TOKEN,
+  TELEGRAM_ONLY,
   TRIGGER_PATTERN,
 } from './config.js';
+import { TelegramChannel } from './channels/telegram.js';
 import { WhatsAppChannel } from './channels/whatsapp.js';
 import {
   ContainerOutput,
@@ -147,9 +150,8 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
 
   // For non-main groups, check if trigger is required and present
   if (!isMainGroup && group.requiresTrigger !== false) {
-    const triggerRe = group.trigger ? new RegExp(group.trigger, 'i') : TRIGGER_PATTERN;
     const hasTrigger = missedMessages.some((m) =>
-      triggerRe.test(m.content.trim()),
+      TRIGGER_PATTERN.test(m.content.trim()),
     );
     if (!hasTrigger) return true;
   }
@@ -356,9 +358,8 @@ async function startMessageLoop(): Promise<void> {
           // Non-trigger messages accumulate in DB and get pulled as
           // context when a trigger eventually arrives.
           if (needsTrigger) {
-            const triggerRe = group.trigger ? new RegExp(group.trigger, 'i') : TRIGGER_PATTERN;
             const hasTrigger = groupMessages.some((m) =>
-              triggerRe.test(m.content.trim()),
+              TRIGGER_PATTERN.test(m.content.trim()),
             );
             if (!hasTrigger) continue;
           }
@@ -447,9 +448,17 @@ async function main(): Promise<void> {
   };
 
   // Create and connect channels
-  whatsapp = new WhatsAppChannel(channelOpts);
-  channels.push(whatsapp);
-  await whatsapp.connect();
+  if (TELEGRAM_BOT_TOKEN) {
+    const telegram = new TelegramChannel(TELEGRAM_BOT_TOKEN, channelOpts);
+    channels.push(telegram);
+    await telegram.connect();
+  }
+
+  if (!TELEGRAM_ONLY) {
+    whatsapp = new WhatsAppChannel(channelOpts);
+    channels.push(whatsapp);
+    await whatsapp.connect();
+  }
 
   // Start subsystems (independently of connection handler)
   startSchedulerLoop({
