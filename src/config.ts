@@ -10,6 +10,7 @@ const envConfig = readEnvFile([
   'ASSISTANT_NAME',
   'ASSISTANT_HAS_OWN_NUMBER',
   'TELEGRAM_BOT_TOKEN',
+  'TELEGRAM_EXTRA_BOTS',
   'TELEGRAM_ONLY',
 ]);
 
@@ -80,5 +81,9 @@ export const TIMEZONE =
 // Telegram configuration
 export const TELEGRAM_BOT_TOKEN =
   process.env.TELEGRAM_BOT_TOKEN || envConfig.TELEGRAM_BOT_TOKEN || '';
+// Extra Telegram bots: "NAME|TOKEN,NAME|TOKEN,..."
+// Pipe separator because Telegram tokens contain colons.
+export const TELEGRAM_EXTRA_BOTS =
+  process.env.TELEGRAM_EXTRA_BOTS || envConfig.TELEGRAM_EXTRA_BOTS || '';
 export const TELEGRAM_ONLY =
   (process.env.TELEGRAM_ONLY || envConfig.TELEGRAM_ONLY) === 'true';

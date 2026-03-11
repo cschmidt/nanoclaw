@@ -4,7 +4,12 @@ import path from 'path';
 import { Bot } from 'grammy';
 import { convert as toMarkdownV2 } from 'telegram-markdown-v2';
 
-import { ASSISTANT_NAME, TELEGRAM_BOT_TOKEN, TRIGGER_PATTERN } from '../config.js';
+import {
+  ASSISTANT_NAME,
+  TELEGRAM_BOT_TOKEN,
+  TELEGRAM_EXTRA_BOTS,
+  TRIGGER_PATTERN,
+} from '../config.js';
 import { resolveGroupFolderPath } from '../group-folder.js';
 import { logger } from '../logger.js';
 import {
@@ -19,7 +24,53 @@ import { registerChannel, ChannelOpts } from './registry.js';
 // Factory returns null when token is missing → channel is skipped.
 registerChannel('telegram', (opts: ChannelOpts) => {
   if (!TELEGRAM_BOT_TOKEN) return null;
-  return new TelegramChannel(TELEGRAM_BOT_TOKEN, opts);
+
+  if (!TELEGRAM_EXTRA_BOTS) {
+    return new TelegramChannel(TELEGRAM_BOT_TOKEN, opts);
+  }
+
+  // Multi-bot mode: parse "NAME|TOKEN,NAME|TOKEN,..."
+  const primary = new TelegramChannel(TELEGRAM_BOT_TOKEN, opts, 'primary');
+  const extras: TelegramChannel[] = [];
+
+  for (const entry of TELEGRAM_EXTRA_BOTS.split(',')) {
+    const trimmed = entry.trim();
+    if (!trimmed) continue;
+    const pipeIdx = trimmed.indexOf('|');
+    if (pipeIdx === -1) {
+      logger.warn(
+        { entry: trimmed },
+        'TELEGRAM_EXTRA_BOTS: invalid format, expected NAME|token',
+      );
+      continue;
+    }
+    const name = trimmed.slice(0, pipeIdx).trim();
+    const botToken = trimmed.slice(pipeIdx + 1).trim();
+    if (!name || !botToken) {
+      logger.warn(
+        { entry: trimmed },
+        'TELEGRAM_EXTRA_BOTS: empty name or token',
+      );
+      continue;
+    }
+    extras.push(new TelegramChannel(botToken, opts, name));
+  }
+
+  if (extras.length === 0) {
+    logger.warn(
+      'TELEGRAM_EXTRA_BOTS set but no valid entries, using single bot',
+    );
+    return new TelegramChannel(TELEGRAM_BOT_TOKEN, opts);
+  }
+
+  logger.info(
+    {
+      count: extras.length + 1,
+      names: ['primary', ...extras.map((b) => b.botName)],
+    },
+    'Telegram multi-bot mode enabled',
+  );
+  return new TelegramMultiBot(primary, extras);
 });
 
 export interface TelegramChannelOpts {
@@ -30,15 +81,22 @@ export interface TelegramChannelOpts {
 
 export class TelegramChannel implements Channel {
   name = 'telegram';
+  knownJids = new Set<string>();
 
   private bot: Bot | null = null;
   private opts: TelegramChannelOpts;
   private botToken: string;
+  public botName: string;
   private typingIntervals = new Map<string, ReturnType<typeof setInterval>>();
 
-  constructor(botToken: string, opts: TelegramChannelOpts) {
+  constructor(
+    botToken: string,
+    opts: TelegramChannelOpts,
+    botName = 'primary',
+  ) {
     this.botToken = botToken;
     this.opts = opts;
+    this.botName = botName;
   }
 
   /**
@@ -74,7 +132,10 @@ export class TelegramChannel implements Channel {
       const fileUrl = `https://api.telegram.org/file/bot${this.botToken}/${file.file_path}`;
       const resp = await fetch(fileUrl);
       if (!resp.ok) {
-        logger.warn({ fileId, status: resp.status }, 'Telegram file download failed');
+        logger.warn(
+          { fileId, status: resp.status },
+          'Telegram file download failed',
+        );
         return null;
       }
 
@@ -117,6 +178,7 @@ export class TelegramChannel implements Channel {
       if (ctx.message.text.startsWith('/')) return;
 
       const chatJid = `tg:${ctx.chat.id}`;
+      this.knownJids.add(chatJid);
       let content = ctx.message.text;
       const timestamp = new Date(ctx.message.date * 1000).toISOString();
       const senderName =
@@ -154,8 +216,15 @@ export class TelegramChannel implements Channel {
       }
 
       // Store chat metadata for discovery
-      const isGroup = ctx.chat.type === 'group' || ctx.chat.type === 'supergroup';
-      this.opts.onChatMetadata(chatJid, timestamp, chatName, 'telegram', isGroup);
+      const isGroup =
+        ctx.chat.type === 'group' || ctx.chat.type === 'supergroup';
+      this.opts.onChatMetadata(
+        chatJid,
+        timestamp,
+        chatName,
+        'telegram',
+        isGroup,
+      );
 
       // Only deliver full message for registered groups
       const group = this.opts.registeredGroups()[chatJid];
@@ -191,6 +260,7 @@ export class TelegramChannel implements Channel {
       opts?: { fileId?: string; filename?: string },
     ) => {
       const chatJid = `tg:${ctx.chat.id}`;
+      this.knownJids.add(chatJid);
       const group = this.opts.registeredGroups()[chatJid];
       if (!group) return;
 
@@ -202,8 +272,15 @@ export class TelegramChannel implements Channel {
         'Unknown';
       const caption = ctx.message.caption ? ` ${ctx.message.caption}` : '';
 
-      const isGroup = ctx.chat.type === 'group' || ctx.chat.type === 'supergroup';
-      this.opts.onChatMetadata(chatJid, timestamp, undefined, 'telegram', isGroup);
+      const isGroup =
+        ctx.chat.type === 'group' || ctx.chat.type === 'supergroup';
+      this.opts.onChatMetadata(
+        chatJid,
+        timestamp,
+        undefined,
+        'telegram',
+        isGroup,
+      );
 
       const deliver = (content: string) => {
         this.opts.onMessage(chatJid, {
@@ -220,14 +297,18 @@ export class TelegramChannel implements Channel {
       // If we have a file_id, attempt to download; deliver asynchronously
       if (opts?.fileId) {
         const msgId = ctx.message.message_id.toString();
-        const filename = opts.filename || `${placeholder.replace(/[\[\] ]/g, '').toLowerCase()}_${msgId}`;
-        this.downloadFile(opts.fileId, group.folder, filename).then((filePath) => {
-          if (filePath) {
-            deliver(`${placeholder} (${filePath})${caption}`);
-          } else {
-            deliver(`${placeholder}${caption}`);
-          }
-        });
+        const filename =
+          opts.filename ||
+          `${placeholder.replace(/[\[\] ]/g, '').toLowerCase()}_${msgId}`;
+        this.downloadFile(opts.fileId, group.folder, filename).then(
+          (filePath) => {
+            if (filePath) {
+              deliver(`${placeholder} (${filePath})${caption}`);
+            } else {
+              deliver(`${placeholder}${caption}`);
+            }
+          },
+        );
         return;
       }
 
@@ -256,7 +337,8 @@ export class TelegramChannel implements Channel {
       });
     });
     this.bot.on('message:audio', (ctx) => {
-      const name = ctx.message.audio?.file_name || `audio_${ctx.message.message_id}`;
+      const name =
+        ctx.message.audio?.file_name || `audio_${ctx.message.message_id}`;
       storeMedia(ctx, '[Audio]', {
         fileId: ctx.message.audio?.file_id,
         filename: name,
@@ -282,12 +364,12 @@ export class TelegramChannel implements Channel {
     });
 
     // Start polling — returns a Promise that resolves when started
-    return new Promise<void>((resolve) => {
+    await new Promise<void>((resolve) => {
       this.bot!.start({
         onStart: (botInfo) => {
           logger.info(
             { username: botInfo.username, id: botInfo.id },
-            'Telegram bot connected',
+            `Telegram bot connected (${this.botName})`,
           );
           console.log(`\n  Telegram bot: @${botInfo.username}`);
           console.log(
@@ -297,6 +379,20 @@ export class TelegramChannel implements Channel {
         },
       });
     });
+
+    // Probe registered groups to discover which chats this bot serves
+    const groups = this.opts.registeredGroups();
+    for (const jid of Object.keys(groups)) {
+      if (!jid.startsWith('tg:')) continue;
+      try {
+        const numericId = jid.replace(/^tg:/, '');
+        await this.bot!.api.getChat(numericId);
+        this.knownJids.add(jid);
+        logger.debug({ jid, botName: this.botName }, 'Bot serves this chat');
+      } catch {
+        // Bot doesn't have access — expected in multi-bot setups
+      }
+    }
   }
 
   async sendMessage(jid: string, text: string): Promise<void> {
@@ -325,7 +421,10 @@ export class TelegramChannel implements Channel {
           });
         } catch {
           // MarkdownV2 parse failed — fall back to plain text
-          logger.debug({ jid }, 'Telegram MarkdownV2 parse failed, falling back to plain text');
+          logger.debug(
+            { jid },
+            'Telegram MarkdownV2 parse failed, falling back to plain text',
+          );
           await this.bot!.api.sendMessage(numericId, chunk);
         }
       };
@@ -384,5 +483,60 @@ export class TelegramChannel implements Channel {
     logger.info({ jid }, 'Telegram typing indicator started');
     await sendAction();
     this.typingIntervals.set(jid, setInterval(sendAction, 4000));
+  }
+}
+
+/**
+ * Multi-bot wrapper: registers as a single 'telegram' channel but routes
+ * messages to the correct sub-bot based on which bot serves each chat.
+ * Each bot polls independently; outbound messages route to the bot whose
+ * knownJids contains the target JID, falling back to the primary bot.
+ */
+export class TelegramMultiBot implements Channel {
+  name = 'telegram';
+
+  private primary: TelegramChannel;
+  private bots: TelegramChannel[];
+
+  constructor(primary: TelegramChannel, extras: TelegramChannel[]) {
+    this.primary = primary;
+    this.bots = [primary, ...extras];
+  }
+
+  async connect(): Promise<void> {
+    await Promise.all(this.bots.map((b) => b.connect()));
+    logger.info(
+      { count: this.bots.length, names: this.bots.map((b) => b.botName) },
+      'Telegram multi-bot connected',
+    );
+  }
+
+  async sendMessage(jid: string, text: string): Promise<void> {
+    const bot = this.findBotForJid(jid);
+    return bot.sendMessage(jid, text);
+  }
+
+  isConnected(): boolean {
+    return this.bots.some((b) => b.isConnected());
+  }
+
+  ownsJid(jid: string): boolean {
+    return jid.startsWith('tg:');
+  }
+
+  async disconnect(): Promise<void> {
+    await Promise.all(this.bots.map((b) => b.disconnect()));
+  }
+
+  async setTyping(jid: string, isTyping: boolean): Promise<void> {
+    const bot = this.findBotForJid(jid);
+    return bot.setTyping(jid, isTyping);
+  }
+
+  private findBotForJid(jid: string): TelegramChannel {
+    const match = this.bots.find((b) => b.knownJids.has(jid));
+    if (match) return match;
+    logger.debug({ jid }, 'No bot has seen this JID, falling back to primary');
+    return this.primary;
   }
 }

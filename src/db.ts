@@ -592,7 +592,9 @@ export function setRegisteredGroup(jid: string, group: RegisteredGroup): void {
       .prepare(
         'SELECT container_config FROM registered_groups WHERE folder = ? AND jid != ?',
       )
-      .get(group.folder, jid) as { container_config: string | null } | undefined;
+      .get(group.folder, jid) as
+      | { container_config: string | null }
+      | undefined;
     if (existing?.container_config) {
       containerConfig = JSON.parse(existing.container_config);
     }
