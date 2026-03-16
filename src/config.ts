@@ -1,3 +1,4 @@
+// NanoClaw configuration — environment and path constants
 import os from 'os';
 import path from 'path';
 
