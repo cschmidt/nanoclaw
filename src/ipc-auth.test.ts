@@ -13,7 +13,9 @@ import { RegisteredGroup } from './types.js';
 
 // Mock self-improve to avoid real subprocess spawning in IPC tests
 vi.mock('./self-improve.js', () => ({
-  handleSelfImprove: vi.fn().mockResolvedValue({ status: 'success', branch: 'test-branch' }),
+  handleSelfImprove: vi
+    .fn()
+    .mockResolvedValue({ status: 'success', branch: 'test-branch' }),
 }));
 
 // Set up registered groups used across tests

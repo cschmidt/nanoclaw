@@ -26,7 +26,10 @@ interface MockSpec {
 function setupSpawnMocks(specs: MockSpec[]): void {
   let callIndex = 0;
   mockSpawn.mockImplementation(() => {
-    const spec = specs[callIndex++] || { code: 1, stderr: 'No mock configured' };
+    const spec = specs[callIndex++] || {
+      code: 1,
+      stderr: 'No mock configured',
+    };
     const { EventEmitter } = require('stream');
     const proc = new EventEmitter() as ChildProcess;
 
@@ -76,7 +79,11 @@ describe('handleSelfImprove', () => {
     fs.mkdirSync(path.dirname(lockFile), { recursive: true });
     fs.writeFileSync(
       lockFile,
-      JSON.stringify({ requestId: 'other', pid: 9999, startedAt: new Date().toISOString() }),
+      JSON.stringify({
+        requestId: 'other',
+        pid: 9999,
+        startedAt: new Date().toISOString(),
+      }),
     );
 
     const request: SelfImproveRequest = {
@@ -89,13 +96,13 @@ describe('handleSelfImprove', () => {
 
     const result = await handleSelfImprove(request, 'test-group');
     expect(result.status).toBe('error');
-    expect(result.error).toContain('Another self-improvement run is in progress');
+    expect(result.error).toContain(
+      'Another self-improvement run is in progress',
+    );
   });
 
   it('returns error when worktree creation fails', async () => {
-    setupSpawnMocks([
-      { code: 1, stderr: 'fatal: cannot create worktree' },
-    ]);
+    setupSpawnMocks([{ code: 1, stderr: 'fatal: cannot create worktree' }]);
 
     const request: SelfImproveRequest = {
       requestId: 'test-456',
@@ -112,12 +119,12 @@ describe('handleSelfImprove', () => {
 
   it('returns error when claude makes no changes', async () => {
     setupSpawnMocks([
-      { code: 0 },                            // git worktree add
-      { code: 0 },                            // npm ci
-      { code: 0, stdout: '' },                // git ls-remote
+      { code: 0 }, // git worktree add
+      { code: 0 }, // npm ci
+      { code: 0, stdout: '' }, // git ls-remote
       { code: 0, stdout: 'No changes needed' }, // claude --print
-      { code: 0, stdout: '' },                // git status --porcelain (empty)
-      { code: 0 },                            // git worktree remove (cleanup)
+      { code: 0, stdout: '' }, // git status --porcelain (empty)
+      { code: 0 }, // git worktree remove (cleanup)
     ]);
 
     const request: SelfImproveRequest = {
@@ -135,14 +142,14 @@ describe('handleSelfImprove', () => {
 
   it('returns error when build fails', async () => {
     setupSpawnMocks([
-      { code: 0 },                                // git worktree add
-      { code: 0 },                                // npm ci
-      { code: 0, stdout: '' },                    // git ls-remote
-      { code: 0, stdout: 'Changes made' },        // claude --print
-      { code: 0, stdout: 'M src/config.ts' },     // git status --porcelain
-      { code: 0 },                                // git add -A
-      { code: 1, stderr: 'tsc error' },           // npm run build (FAILS)
-      { code: 0 },                                // git worktree remove (cleanup)
+      { code: 0 }, // git worktree add
+      { code: 0 }, // npm ci
+      { code: 0, stdout: '' }, // git ls-remote
+      { code: 0, stdout: 'Changes made' }, // claude --print
+      { code: 0, stdout: 'M src/config.ts' }, // git status --porcelain
+      { code: 0 }, // git add -A
+      { code: 1, stderr: 'tsc error' }, // npm run build (FAILS)
+      { code: 0 }, // git worktree remove (cleanup)
     ]);
 
     const request: SelfImproveRequest = {
@@ -161,15 +168,15 @@ describe('handleSelfImprove', () => {
 
   it('returns error when tests fail', async () => {
     setupSpawnMocks([
-      { code: 0 },                                // git worktree add
-      { code: 0 },                                // npm ci
-      { code: 0, stdout: '' },                    // git ls-remote
-      { code: 0, stdout: 'Changes made' },        // claude --print
-      { code: 0, stdout: 'M src/config.ts' },     // git status --porcelain
-      { code: 0 },                                // git add -A
-      { code: 0, stdout: 'Build ok' },            // npm run build
-      { code: 1, stderr: 'FAIL test.ts' },        // npm test (FAILS)
-      { code: 0 },                                // git worktree remove (cleanup)
+      { code: 0 }, // git worktree add
+      { code: 0 }, // npm ci
+      { code: 0, stdout: '' }, // git ls-remote
+      { code: 0, stdout: 'Changes made' }, // claude --print
+      { code: 0, stdout: 'M src/config.ts' }, // git status --porcelain
+      { code: 0 }, // git add -A
+      { code: 0, stdout: 'Build ok' }, // npm run build
+      { code: 1, stderr: 'FAIL test.ts' }, // npm test (FAILS)
+      { code: 0 }, // git worktree remove (cleanup)
     ]);
 
     const request: SelfImproveRequest = {
@@ -188,19 +195,19 @@ describe('handleSelfImprove', () => {
 
   it('succeeds with dry_run=true and preserves branch', async () => {
     setupSpawnMocks([
-      { code: 0 },                                // git worktree add
-      { code: 0 },                                // npm ci
-      { code: 0, stdout: '' },                    // git ls-remote
-      { code: 0, stdout: 'Added comment' },       // claude --print
-      { code: 0, stdout: 'M src/config.ts' },     // git status --porcelain
-      { code: 0 },                                // git add -A
-      { code: 0, stdout: 'Build ok' },            // npm run build
-      { code: 0, stdout: 'Tests pass' },          // npm test
-      { code: 0 },                                // git commit
+      { code: 0 }, // git worktree add
+      { code: 0 }, // npm ci
+      { code: 0, stdout: '' }, // git ls-remote
+      { code: 0, stdout: 'Added comment' }, // claude --print
+      { code: 0, stdout: 'M src/config.ts' }, // git status --porcelain
+      { code: 0 }, // git add -A
+      { code: 0, stdout: 'Build ok' }, // npm run build
+      { code: 0, stdout: 'Tests pass' }, // npm test
+      { code: 0 }, // git commit
       { code: 0, stdout: ' src/config.ts | 1 +\n 1 file changed' }, // git diff --stat
-      { code: 0, stdout: '+// comment added' },   // git diff (full)
-      { code: 0, stdout: 'src/config.ts' },       // git diff --name-only
-      { code: 0 },                                // git worktree remove
+      { code: 0, stdout: '+// comment added' }, // git diff (full)
+      { code: 0, stdout: 'src/config.ts' }, // git diff --name-only
+      { code: 0 }, // git worktree remove
     ]);
 
     const request: SelfImproveRequest = {
@@ -221,7 +228,7 @@ describe('handleSelfImprove', () => {
 
   it('releases lock after failure', async () => {
     setupSpawnMocks([
-      { code: 1, stderr: 'fatal error' },         // git worktree add (fails)
+      { code: 1, stderr: 'fatal error' }, // git worktree add (fails)
     ]);
 
     const request: SelfImproveRequest = {

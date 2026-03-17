@@ -504,30 +504,32 @@ export async function processTaskIpc(
       };
 
       // Run async — write result to response file
-      handleSelfImprove(request, sourceGroup).then((result) => {
-        if (hostResponseFile) {
-          const tempPath = `${hostResponseFile}.tmp`;
-          fs.writeFileSync(tempPath, JSON.stringify(result, null, 2));
-          fs.renameSync(tempPath, hostResponseFile);
-        }
-        logger.info(
-          { requestId: data.requestId, sourceGroup, status: result.status },
-          'Self-improvement run completed',
-        );
-      }).catch((err) => {
-        logger.error(
-          { requestId: data.requestId, sourceGroup, err },
-          'Self-improvement run failed',
-        );
-        if (hostResponseFile) {
-          const tempPath = `${hostResponseFile}.tmp`;
-          fs.writeFileSync(
-            tempPath,
-            JSON.stringify({ status: 'error', error: String(err) }, null, 2),
+      handleSelfImprove(request, sourceGroup)
+        .then((result) => {
+          if (hostResponseFile) {
+            const tempPath = `${hostResponseFile}.tmp`;
+            fs.writeFileSync(tempPath, JSON.stringify(result, null, 2));
+            fs.renameSync(tempPath, hostResponseFile);
+          }
+          logger.info(
+            { requestId: data.requestId, sourceGroup, status: result.status },
+            'Self-improvement run completed',
           );
-          fs.renameSync(tempPath, hostResponseFile);
-        }
-      });
+        })
+        .catch((err) => {
+          logger.error(
+            { requestId: data.requestId, sourceGroup, err },
+            'Self-improvement run failed',
+          );
+          if (hostResponseFile) {
+            const tempPath = `${hostResponseFile}.tmp`;
+            fs.writeFileSync(
+              tempPath,
+              JSON.stringify({ status: 'error', error: String(err) }, null, 2),
+            );
+            fs.renameSync(tempPath, hostResponseFile);
+          }
+        });
 
       logger.info(
         { requestId: data.requestId, sourceGroup },

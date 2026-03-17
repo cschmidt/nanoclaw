@@ -41,7 +41,14 @@ function acquireLock(requestId: string): boolean {
         return false;
       }
     }
-    fs.writeFileSync(LOCK_FILE, JSON.stringify({ requestId, pid: process.pid, startedAt: new Date().toISOString() }));
+    fs.writeFileSync(
+      LOCK_FILE,
+      JSON.stringify({
+        requestId,
+        pid: process.pid,
+        startedAt: new Date().toISOString(),
+      }),
+    );
     return true;
   } catch {
     return false;
@@ -99,7 +106,9 @@ async function buildSkillContext(projectRoot: string): Promise<string> {
   // Read project CLAUDE.md
   const claudeMdPath = path.join(projectRoot, 'CLAUDE.md');
   if (fs.existsSync(claudeMdPath)) {
-    sections.push('# Project Context\n' + fs.readFileSync(claudeMdPath, 'utf-8'));
+    sections.push(
+      '# Project Context\n' + fs.readFileSync(claudeMdPath, 'utf-8'),
+    );
   }
 
   // Layer 1: List installed skills
@@ -113,7 +122,10 @@ async function buildSkillContext(projectRoot: string): Promise<string> {
     return `\n## ${label}\n${files.map((f) => `- ${f}`).join('\n')}`;
   };
 
-  const containerSkills = listSkills(containerSkillsDir, 'Installed Container Skills');
+  const containerSkills = listSkills(
+    containerSkillsDir,
+    'Installed Container Skills',
+  );
   const hostSkills = listSkills(hostSkillsDir, 'Installed Host Skills');
   if (containerSkills || hostSkills) {
     sections.push('# Skill Inventory' + containerSkills + hostSkills);
@@ -132,14 +144,16 @@ async function buildSkillContext(projectRoot: string): Promise<string> {
       .map((line) => line.replace(/.*refs\/heads\//, ''))
       .filter((b) => b !== 'main');
     if (branches.length > 0) {
-      sections.push('# Upstream Branches\n' + branches.map((b) => `- ${b}`).join('\n'));
+      sections.push(
+        '# Upstream Branches\n' + branches.map((b) => `- ${b}`).join('\n'),
+      );
     }
   }
 
   sections.push(
     '# Instructions\n' +
-    'Prefer reusing existing skills and upstream branches over reimplementing functionality. ' +
-    'Make the minimum change needed. Run npm run build && npm test to validate.',
+      'Prefer reusing existing skills and upstream branches over reimplementing functionality. ' +
+      'Make the minimum change needed. Run npm run build && npm test to validate.',
   );
 
   return sections.join('\n\n');
@@ -173,7 +187,10 @@ export async function handleSelfImprove(
       { cwd: projectRoot },
     );
     if (worktreeCode !== 0) {
-      return { status: 'error', error: `Failed to create worktree: ${worktreeErr}` };
+      return {
+        status: 'error',
+        error: `Failed to create worktree: ${worktreeErr}`,
+      };
     }
 
     try {
@@ -194,7 +211,11 @@ export async function handleSelfImprove(
       const fullPrompt = systemContext
         ? `<context>\n${systemContext}\n</context>\n\n${request.prompt}`
         : request.prompt;
-      const { code: claudeCode, stdout: claudeOutput, stderr: claudeErr } = await runCommand(
+      const {
+        code: claudeCode,
+        stdout: claudeOutput,
+        stderr: claudeErr,
+      } = await runCommand(
         'claude',
         ['-p', '--output-format', 'text', '--dangerously-skip-permissions'],
         {
@@ -221,7 +242,9 @@ export async function handleSelfImprove(
       if (!statusOutput.trim()) {
         return {
           status: 'error',
-          error: 'Claude made no file changes. Output:\n' + claudeOutput.slice(0, 2000),
+          error:
+            'Claude made no file changes. Output:\n' +
+            claudeOutput.slice(0, 2000),
         };
       }
 
@@ -229,11 +252,14 @@ export async function handleSelfImprove(
       await runCommand('git', ['add', '-A'], { cwd: worktreePath });
 
       // Run build
-      const { code: buildCode, stdout: buildOut, stderr: buildErr } = await runCommand(
-        'npm',
-        ['run', 'build'],
-        { cwd: worktreePath, timeout: 60000 },
-      );
+      const {
+        code: buildCode,
+        stdout: buildOut,
+        stderr: buildErr,
+      } = await runCommand('npm', ['run', 'build'], {
+        cwd: worktreePath,
+        timeout: 60000,
+      });
 
       const buildOutput = (buildOut + '\n' + buildErr).trim();
 
@@ -246,11 +272,14 @@ export async function handleSelfImprove(
       }
 
       // Run tests
-      const { code: testCode, stdout: testOut, stderr: testErr } = await runCommand(
-        'npm',
-        ['test'],
-        { cwd: worktreePath, timeout: 120000 },
-      );
+      const {
+        code: testCode,
+        stdout: testOut,
+        stderr: testErr,
+      } = await runCommand('npm', ['test'], {
+        cwd: worktreePath,
+        timeout: 120000,
+      });
 
       const testOutput = (testOut + '\n' + testErr).trim();
 
@@ -266,7 +295,11 @@ export async function handleSelfImprove(
       // Commit changes
       await runCommand(
         'git',
-        ['commit', '-m', `self-improve: ${request.prompt.slice(0, 72)}\n\nRequested by: ${sourceGroup}\nRequest ID: ${request.requestId}`],
+        [
+          'commit',
+          '-m',
+          `self-improve: ${request.prompt.slice(0, 72)}\n\nRequested by: ${sourceGroup}\nRequest ID: ${request.requestId}`,
+        ],
         { cwd: worktreePath },
       );
 
@@ -303,7 +336,11 @@ export async function handleSelfImprove(
 
       // If not dry run, apply the change
       if (!request.dryRun) {
-        const applyResult = await applyImprovement(branchName, projectRoot, request.autoRestart);
+        const applyResult = await applyImprovement(
+          branchName,
+          projectRoot,
+          request.autoRestart,
+        );
         result.applied = applyResult.applied;
         if (applyResult.error) {
           result.error = applyResult.error;
@@ -319,10 +356,15 @@ export async function handleSelfImprove(
       });
       // If dry run, keep the branch for later apply; otherwise clean up
       if (request.dryRun) {
-        logger.info({ branchName }, 'Worktree cleaned up, branch preserved for review');
+        logger.info(
+          { branchName },
+          'Worktree cleaned up, branch preserved for review',
+        );
       } else {
         // Branch merged or failed — clean up
-        await runCommand('git', ['branch', '-D', branchName], { cwd: projectRoot });
+        await runCommand('git', ['branch', '-D', branchName], {
+          cwd: projectRoot,
+        });
       }
     }
   } finally {
@@ -357,8 +399,39 @@ async function applyImprovement(
 
   if (buildCode !== 0) {
     // Revert the merge
-    await runCommand('git', ['revert', '--no-edit', 'HEAD'], { cwd: projectRoot });
-    return { applied: false, error: `Post-merge build failed, reverted: ${buildErr}` };
+    await runCommand('git', ['revert', '--no-edit', 'HEAD'], {
+      cwd: projectRoot,
+    });
+    return {
+      applied: false,
+      error: `Post-merge build failed, reverted: ${buildErr}`,
+    };
+  }
+
+  // Check if container files changed — rebuild container image if so
+  const { stdout: changedFiles } = await runCommand(
+    'git',
+    ['diff', 'HEAD~1', '--name-only'],
+    { cwd: projectRoot },
+  );
+  const needsContainerRebuild = changedFiles
+    .split('\n')
+    .some((f) => f.startsWith('container/'));
+
+  if (needsContainerRebuild) {
+    logger.info('Container files changed, rebuilding container image');
+    const buildScript = path.join(projectRoot, 'container', 'build.sh');
+    const { code: containerBuildCode, stderr: containerBuildErr } =
+      await runCommand('bash', [buildScript], {
+        cwd: projectRoot,
+        timeout: 300000,
+      });
+    if (containerBuildCode !== 0) {
+      logger.error(
+        { stderr: containerBuildErr },
+        'Container image rebuild failed (merge kept, manual rebuild needed)',
+      );
+    }
   }
 
   // Clean up the branch after successful merge
