@@ -199,6 +199,19 @@ function buildVolumeMounts(
     readonly: false,
   });
 
+  // Mount gcalcli OAuth token so agents can access Google Calendar
+  const gcalcliOauth = path.join(
+    process.env.HOME || '/root',
+    '.gcalcli_oauth',
+  );
+  if (fs.existsSync(gcalcliOauth)) {
+    mounts.push({
+      hostPath: gcalcliOauth,
+      containerPath: '/home/node/.gcalcli_oauth',
+      readonly: true,
+    });
+  }
+
   // Additional mounts validated against external allowlist (tamper-proof from containers)
   if (group.containerConfig?.additionalMounts) {
     const validatedMounts = validateAdditionalMounts(
