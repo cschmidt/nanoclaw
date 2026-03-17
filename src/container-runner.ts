@@ -208,7 +208,7 @@ function buildVolumeMounts(
     mounts.push({
       hostPath: gcalcliOauth,
       containerPath: '/home/node/.gcalcli_oauth',
-      readonly: true,
+      readonly: false,
     });
   }
 
