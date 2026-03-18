@@ -4,6 +4,7 @@
  */
 import { ChildProcess, exec, spawn } from 'child_process';
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 
 import {
@@ -201,7 +202,7 @@ function buildVolumeMounts(
 
   // Mount gcalcli OAuth token so agents can access Google Calendar
   const gcalcliOauth = path.join(
-    process.env.HOME || '/root',
+    os.homedir(),
     '.gcalcli_oauth',
   );
   if (fs.existsSync(gcalcliOauth)) {
@@ -214,7 +215,7 @@ function buildVolumeMounts(
 
   // Mount Google Workspace CLI credentials so agents can access Gmail, Drive, etc.
   const gwsCredentials = path.join(
-    process.env.HOME || '/root',
+    os.homedir(),
     '.gws-credentials.json',
   );
   if (fs.existsSync(gwsCredentials)) {
