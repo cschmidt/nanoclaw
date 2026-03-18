@@ -212,6 +212,19 @@ function buildVolumeMounts(
     });
   }
 
+  // Mount Google Workspace CLI credentials so agents can access Gmail, Drive, etc.
+  const gwsCredentials = path.join(
+    process.env.HOME || '/root',
+    '.gws-credentials.json',
+  );
+  if (fs.existsSync(gwsCredentials)) {
+    mounts.push({
+      hostPath: gwsCredentials,
+      containerPath: '/home/node/.gws-credentials.json',
+      readonly: true,
+    });
+  }
+
   // Additional mounts validated against external allowlist (tamper-proof from containers)
   if (group.containerConfig?.additionalMounts) {
     const validatedMounts = validateAdditionalMounts(
