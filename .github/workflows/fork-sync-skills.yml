@@ -4,7 +4,7 @@ on:
   # Triggered by upstream repo via repository_dispatch
   repository_dispatch:
     types: [upstream-main-updated]
-  # Fallback: run on schedule in case dispatch isn't configured
+  # Fallback: run on a schedule in case dispatch isn't configured
   schedule:
     - cron: '0 */6 * * *'  # every 6 hours
   # Also run when fork's main is pushed directly
@@ -15,6 +15,10 @@ on:
 permissions:
   contents: write
   issues: write
+
+concurrency:
+  group: fork-sync
+  cancel-in-progress: true
 
 jobs:
   sync-and-merge:
@@ -83,6 +87,10 @@ jobs:
       - name: Merge main into skill branches
         id: merge
         run: |
+          # Re-fetch to pick up any changes pushed since job start
+          git fetch origin
+
+
           FAILED=""
           SUCCEEDED=""
 
