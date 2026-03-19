@@ -201,10 +201,7 @@ function buildVolumeMounts(
   });
 
   // Mount gcalcli OAuth token so agents can access Google Calendar
-  const gcalcliOauth = path.join(
-    os.homedir(),
-    '.gcalcli_oauth',
-  );
+  const gcalcliOauth = path.join(os.homedir(), '.gcalcli_oauth');
   if (fs.existsSync(gcalcliOauth)) {
     mounts.push({
       hostPath: gcalcliOauth,
@@ -214,10 +211,7 @@ function buildVolumeMounts(
   }
 
   // Mount Google Workspace CLI credentials so agents can access Gmail, Drive, etc.
-  const gwsCredentials = path.join(
-    os.homedir(),
-    '.gws-credentials.json',
-  );
+  const gwsCredentials = path.join(os.homedir(), '.gws-credentials.json');
   if (fs.existsSync(gwsCredentials)) {
     mounts.push({
       hostPath: gwsCredentials,
