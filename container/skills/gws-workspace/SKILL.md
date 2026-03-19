@@ -132,6 +132,23 @@ Note: For calendar operations, prefer `gcalcli` (see gcalcli-calendar skill) whi
 #### Delete task
 - `gws tasks delete --tasklist "@default" --task "<taskId>"`
 
+## Workflow & Recipe Skills
+
+Before building a multi-step process from scratch, check whether a workflow or recipe skill covers it:
+
+- `gws-workflow-meeting-prep` — prep for an upcoming meeting (agenda, attendees, context)
+- `gws-workflow-standup-report` — daily standup summary
+- `gws-workflow-weekly-digest` — weekly summary across calendar, email, tasks
+- `gws-workflow-email-to-task` — convert email into a task
+- `recipe-find-free-time` — find available slots across calendars
+- `recipe-plan-weekly-schedule` — lay out the week ahead
+- `recipe-reschedule-meeting` — move an existing meeting
+- `recipe-block-focus-time` — block time on calendar for focused work
+- `recipe-save-email-to-doc` — archive an email thread to Drive
+- `recipe-share-doc-and-notify` — share a file and notify recipients
+
+Invoke with e.g. `/gws-workflow-meeting-prep` or check the full list: skills named `gws-workflow-*` and `recipe-*`.
+
 ## Actions policy
 
 ### Reads: execute immediately
