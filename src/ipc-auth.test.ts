@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 import {
   _initTestDatabase,
@@ -10,6 +10,13 @@ import {
 } from './db.js';
 import { processTaskIpc, IpcDeps } from './ipc.js';
 import { RegisteredGroup } from './types.js';
+
+// Mock self-improve to avoid real subprocess spawning in IPC tests
+vi.mock('./self-improve.js', () => ({
+  handleSelfImprove: vi
+    .fn()
+    .mockResolvedValue({ status: 'success', branch: 'test-branch' }),
+}));
 
 // Set up registered groups used across tests
 const MAIN_GROUP: RegisteredGroup = {
@@ -632,6 +639,115 @@ describe('schedule_task context_mode', () => {
 
     const tasks = getAllTasks();
     expect(tasks[0].context_mode).toBe('isolated');
+  });
+});
+
+// --- claude_code authorization ---
+
+describe('claude_code authorization', () => {
+  it('blocks group without canModifySystem flag', async () => {
+    const { handleSelfImprove } = await import('./self-improve.js');
+    const mockHandle = vi.mocked(handleSelfImprove);
+    mockHandle.mockClear();
+
+    await processTaskIpc(
+      {
+        type: 'claude_code',
+        requestId: 'req-1',
+        prompt: 'add a comment',
+      },
+      'other-group',
+      false,
+      deps,
+    );
+
+    expect(mockHandle).not.toHaveBeenCalled();
+  });
+
+  it('allows group with canModifySystem flag', async () => {
+    const MODIFY_GROUP: RegisteredGroup = {
+      name: 'Modifier',
+      folder: 'modifier-group',
+      trigger: '@Andy',
+      added_at: '2024-01-01T00:00:00.000Z',
+      canModifySystem: true,
+    };
+    groups['modifier@g.us'] = MODIFY_GROUP;
+    setRegisteredGroup('modifier@g.us', MODIFY_GROUP);
+
+    const { handleSelfImprove } = await import('./self-improve.js');
+    const mockHandle = vi.mocked(handleSelfImprove);
+    mockHandle.mockClear();
+
+    await processTaskIpc(
+      {
+        type: 'claude_code',
+        requestId: 'req-2',
+        prompt: 'add a feature',
+      },
+      'modifier-group',
+      false,
+      deps,
+    );
+
+    expect(mockHandle).toHaveBeenCalledOnce();
+    expect(mockHandle.mock.calls[0][0].prompt).toBe('add a feature');
+    expect(mockHandle.mock.calls[0][0].dryRun).toBe(true); // default
+  });
+
+  it('allows main group even without canModifySystem', async () => {
+    const { handleSelfImprove } = await import('./self-improve.js');
+    const mockHandle = vi.mocked(handleSelfImprove);
+    mockHandle.mockClear();
+
+    await processTaskIpc(
+      {
+        type: 'claude_code',
+        requestId: 'req-3',
+        prompt: 'main group change',
+      },
+      'whatsapp_main',
+      true,
+      deps,
+    );
+
+    expect(mockHandle).toHaveBeenCalledOnce();
+  });
+
+  it('rejects claude_code with missing prompt', async () => {
+    const { handleSelfImprove } = await import('./self-improve.js');
+    const mockHandle = vi.mocked(handleSelfImprove);
+    mockHandle.mockClear();
+
+    await processTaskIpc(
+      {
+        type: 'claude_code',
+        requestId: 'req-4',
+      },
+      'whatsapp_main',
+      true,
+      deps,
+    );
+
+    expect(mockHandle).not.toHaveBeenCalled();
+  });
+
+  it('rejects claude_code with missing requestId', async () => {
+    const { handleSelfImprove } = await import('./self-improve.js');
+    const mockHandle = vi.mocked(handleSelfImprove);
+    mockHandle.mockClear();
+
+    await processTaskIpc(
+      {
+        type: 'claude_code',
+        prompt: 'no request id',
+      },
+      'whatsapp_main',
+      true,
+      deps,
+    );
+
+    expect(mockHandle).not.toHaveBeenCalled();
   });
 });
 

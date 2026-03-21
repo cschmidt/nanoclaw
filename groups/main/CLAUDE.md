@@ -238,6 +238,147 @@ You can read and write to `/workspace/project/groups/global/CLAUDE.md` for facts
 
 ---
 
+## Daily News Briefing
+
+A scheduled task runs daily at 7:00 AM Pacific to compile a news briefing from these sources:
+
+| Source | URL | Focus |
+|--------|-----|-------|
+| The Economist | https://www.economist.com/ | World affairs, economics, analysis |
+| Reuters | https://www.reuters.com/ | Breaking international news |
+| BBC News | http://www.bbc.co.uk/news/ | World news, UK perspective |
+| Google News | http://news.google.com/ | Aggregated top stories |
+| Al Jazeera | http://english.aljazeera.net/ | International news, Middle East |
+| Vancouver Tech Journal | https://www.vantechjournal.com/ | Local Vancouver tech scene |
+| Seeking Alpha | https://seekingalpha.com/ | Markets and investing |
+
+### Fetching Strategy
+
+**IMPORTANT: You MUST use `agent-browser` (via Bash) for sites that block bots. WebFetch WILL fail on these — do not attempt it.**
+
+Step-by-step for each source:
+
+1. **The Economist** — use `agent-browser`
+   ```bash
+   agent-browser open https://www.economist.com/
+   agent-browser snapshot
+   ```
+2. **Reuters** — use `agent-browser`
+   ```bash
+   agent-browser open https://www.reuters.com/
+   agent-browser snapshot
+   ```
+3. **Vancouver Tech Journal** — use `agent-browser`
+   ```bash
+   agent-browser open https://www.vantechjournal.com/
+   agent-browser snapshot
+   ```
+4. **Google News** — use `agent-browser` (blocks WebFetch)
+   ```bash
+   agent-browser open https://news.google.com/
+   agent-browser snapshot
+   ```
+5. **BBC News** — use WebFetch: `https://www.bbc.co.uk/news`
+6. **Al Jazeera** — use WebFetch: `https://english.aljazeera.net/`
+7. **Seeking Alpha** — use WebFetch: `https://seekingalpha.com/`
+
+After each `agent-browser open`, use `agent-browser snapshot` to read the page content. Close the browser with `agent-browser close` between sites to free memory.
+
+### Briefing Format
+
+Send a single message via `send_message` structured like this:
+
+```
+*🌍 World*
+• Story headline — 1-2 sentence summary (Source)
+• ...
+
+*💼 Business & Markets*
+• ...
+
+*💻 Tech*
+• ...
+
+*📍 Local (Vancouver)*
+• ...
+```
+
+Guidelines:
+- 10-15 stories total, grouped by theme
+- Each story gets a bold headline and 1-2 sentence summary with the source in parentheses
+- Aim for ~2000-3000 characters total — detailed enough to be informative, short enough for WhatsApp
+
+### Preferences
+(Updated based on user feedback — modify this section when the user asks for changes)
+- *High interest topics*: Fusion energy progress, solid state batteries in EVs, AI developments
+- *Skip*: Sports (unless truly headline-worthy like major upsets or records)
+- Coverage: Focus on topics of special interest while maintaining world news coverage
+
+---
+
+## Google Contacts (People API)
+
+You can read and create Google Contacts via the People API using `curl` with bearer tokens.
+
+### Getting a token
+
+```bash
+TOKEN=$(gcloud auth application-default print-access-token)
+```
+
+**IMPORTANT:** Every People API request MUST include the quota project header:
+```
+-H "x-goog-user-project: schmidtdisturber-nanoclaw"
+```
+
+### List contacts
+
+```bash
+curl -s -H "Authorization: Bearer $TOKEN" -H "x-goog-user-project: schmidtdisturber-nanoclaw" \
+  "https://people.googleapis.com/v1/people/me/connections?personFields=names,emailAddresses,phoneNumbers&pageSize=100" \
+  | jq '.connections[] | {name: .names[0].displayName, email: .emailAddresses[0]?.value, phone: .phoneNumbers[0]?.value}'
+```
+
+Use `pageToken` from the response for pagination if needed.
+
+### Search contacts
+
+```bash
+curl -s -H "Authorization: Bearer $TOKEN" -H "x-goog-user-project: schmidtdisturber-nanoclaw" \
+  "https://people.googleapis.com/v1/people:searchContacts?query=SEARCH_TERM&readMask=names,emailAddresses,phoneNumbers&pageSize=10"
+```
+
+### Get contact details
+
+```bash
+curl -s -H "Authorization: Bearer $TOKEN" -H "x-goog-user-project: schmidtdisturber-nanoclaw" \
+  "https://people.googleapis.com/v1/RESOURCE_NAME?personFields=names,emailAddresses,phoneNumbers,addresses,organizations,birthdays"
+```
+
+Replace `RESOURCE_NAME` with the contact's resource name (e.g., `people/c1234567890`).
+
+### Create a contact
+
+```bash
+curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "x-goog-user-project: schmidtdisturber-nanoclaw" \
+  -H "Content-Type: application/json" \
+  "https://people.googleapis.com/v1/people:createContact" \
+  -d '{
+    "names": [{"givenName": "First", "familyName": "Last"}],
+    "emailAddresses": [{"value": "email@example.com"}],
+    "phoneNumbers": [{"value": "+1234567890"}]
+  }'
+```
+
+### Notes
+
+- Tokens are short-lived (~1 hour) but `gcloud auth application-default print-access-token` auto-refreshes them
+- The `jq` tool is available in the container for parsing JSON responses
+- Always use `personFields` or `readMask` to specify which fields to return
+- Always include `-H "x-goog-user-project: schmidtdisturber-nanoclaw"` — without it, the API returns a 403
+
+---
+
 ## Scheduling for Other Groups
 
 When scheduling tasks for other groups, use the `target_group_jid` parameter with the group's JID from `registered_groups.json`:

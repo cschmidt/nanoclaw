@@ -8,6 +8,7 @@ import { AvailableGroup } from './container-runner.js';
 import { createTask, deleteTask, getTaskById, updateTask } from './db.js';
 import { isValidGroupFolder } from './group-folder.js';
 import { logger } from './logger.js';
+import { handleSelfImprove, SelfImproveRequest } from './self-improve.js';
 import { RegisteredGroup } from './types.js';
 
 export interface IpcDeps {
@@ -62,6 +63,10 @@ export function startIpcWatcher(deps: IpcDeps): void {
       const isMain = folderIsMain.get(sourceGroup) === true;
       const messagesDir = path.join(ipcBaseDir, sourceGroup, 'messages');
       const tasksDir = path.join(ipcBaseDir, sourceGroup, 'tasks');
+
+      // Ensure responses directory exists for claude_code results
+      const responsesDir = path.join(ipcBaseDir, sourceGroup, 'responses');
+      fs.mkdirSync(responsesDir, { recursive: true });
 
       // Process messages from this group's IPC directory
       try {
@@ -171,6 +176,11 @@ export async function processTaskIpc(
     trigger?: string;
     requiresTrigger?: boolean;
     containerConfig?: RegisteredGroup['containerConfig'];
+    // For claude_code
+    requestId?: string;
+    dryRun?: boolean;
+    autoRestart?: boolean;
+    responseFile?: string;
   },
   sourceGroup: string, // Verified identity from IPC directory
   isMain: boolean, // Verified from directory path
@@ -448,6 +458,85 @@ export async function processTaskIpc(
         );
       }
       break;
+
+    case 'claude_code': {
+      // Authorization: check can_modify_system flag
+      const group = Object.values(registeredGroups).find(
+        (g) => g.folder === sourceGroup,
+      );
+      if (!group?.canModifySystem && !isMain) {
+        logger.warn(
+          { sourceGroup },
+          'Unauthorized claude_code attempt blocked',
+        );
+        break;
+      }
+      if (!data.prompt || !data.requestId) {
+        logger.warn(
+          { sourceGroup },
+          'Invalid claude_code request - missing prompt or requestId',
+        );
+        break;
+      }
+
+      // Translate container-side response path to host-side path
+      // Container uses /workspace/ipc/responses/{id}.json
+      // Host stores at data/ipc/{sourceGroup}/responses/{id}.json
+      let hostResponseFile = '';
+      if (data.responseFile) {
+        const responseFilename = path.basename(data.responseFile);
+        const responsesDir = path.join(
+          DATA_DIR,
+          'ipc',
+          sourceGroup,
+          'responses',
+        );
+        fs.mkdirSync(responsesDir, { recursive: true });
+        hostResponseFile = path.join(responsesDir, responseFilename);
+      }
+
+      const request: SelfImproveRequest = {
+        requestId: data.requestId,
+        prompt: data.prompt,
+        dryRun: data.dryRun !== false, // default true
+        autoRestart: data.autoRestart === true,
+        responseFile: hostResponseFile,
+      };
+
+      // Run async — write result to response file
+      handleSelfImprove(request, sourceGroup)
+        .then((result) => {
+          if (hostResponseFile) {
+            const tempPath = `${hostResponseFile}.tmp`;
+            fs.writeFileSync(tempPath, JSON.stringify(result, null, 2));
+            fs.renameSync(tempPath, hostResponseFile);
+          }
+          logger.info(
+            { requestId: data.requestId, sourceGroup, status: result.status },
+            'Self-improvement run completed',
+          );
+        })
+        .catch((err) => {
+          logger.error(
+            { requestId: data.requestId, sourceGroup, err },
+            'Self-improvement run failed',
+          );
+          if (hostResponseFile) {
+            const tempPath = `${hostResponseFile}.tmp`;
+            fs.writeFileSync(
+              tempPath,
+              JSON.stringify({ status: 'error', error: String(err) }, null, 2),
+            );
+            fs.renameSync(tempPath, hostResponseFile);
+          }
+        });
+
+      logger.info(
+        { requestId: data.requestId, sourceGroup },
+        'Self-improvement run started',
+      );
+      break;
+    }
 
     default:
       logger.warn({ type: data.type }, 'Unknown IPC task type');

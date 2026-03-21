@@ -4,6 +4,7 @@
  */
 import { ChildProcess, exec, spawn } from 'child_process';
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 
 import {
@@ -27,7 +28,7 @@ import {
 } from './container-runtime.js';
 import { detectAuthMode } from './credential-proxy.js';
 import { validateAdditionalMounts } from './mount-security.js';
-import { RegisteredGroup } from './types.js';
+import { ContainerConfig, RegisteredGroup } from './types.js';
 
 // Sentinel markers for robust output parsing (must match agent-runner)
 const OUTPUT_START_MARKER = '---NANOCLAW_OUTPUT_START---';
@@ -199,6 +200,26 @@ function buildVolumeMounts(
     readonly: false,
   });
 
+  // Mount gcalcli OAuth token so agents can access Google Calendar
+  const gcalcliOauth = path.join(os.homedir(), '.gcalcli_oauth');
+  if (fs.existsSync(gcalcliOauth)) {
+    mounts.push({
+      hostPath: gcalcliOauth,
+      containerPath: '/home/node/.gcalcli_oauth',
+      readonly: false,
+    });
+  }
+
+  // Mount Google Workspace CLI credentials so agents can access Gmail, Drive, etc.
+  const gwsCredentials = path.join(os.homedir(), '.gws-credentials.json');
+  if (fs.existsSync(gwsCredentials)) {
+    mounts.push({
+      hostPath: gwsCredentials,
+      containerPath: '/home/node/.gws-credentials.json',
+      readonly: true,
+    });
+  }
+
   // Additional mounts validated against external allowlist (tamper-proof from containers)
   if (group.containerConfig?.additionalMounts) {
     const validatedMounts = validateAdditionalMounts(
@@ -215,6 +236,7 @@ function buildVolumeMounts(
 function buildContainerArgs(
   mounts: VolumeMount[],
   containerName: string,
+  containerConfig?: ContainerConfig,
 ): string[] {
   const args: string[] = ['run', '-i', '--rm', '--name', containerName];
 
@@ -236,6 +258,11 @@ function buildContainerArgs(
     args.push('-e', 'ANTHROPIC_API_KEY=placeholder');
   } else {
     args.push('-e', 'CLAUDE_CODE_OAUTH_TOKEN=placeholder');
+  }
+
+  // Model override (e.g., Opus for design-heavy agents)
+  if (containerConfig?.model) {
+    args.push('-e', `CLAUDE_MODEL=${containerConfig.model}`);
   }
 
   // Runtime-specific args for host gateway resolution
@@ -278,7 +305,11 @@ export async function runContainerAgent(
   const mounts = buildVolumeMounts(group, input.isMain);
   const safeName = group.folder.replace(/[^a-zA-Z0-9-]/g, '-');
   const containerName = `nanoclaw-${safeName}-${Date.now()}`;
-  const containerArgs = buildContainerArgs(mounts, containerName);
+  const containerArgs = buildContainerArgs(
+    mounts,
+    containerName,
+    group.containerConfig,
+  );
 
   logger.debug(
     {

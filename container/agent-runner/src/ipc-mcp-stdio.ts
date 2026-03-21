@@ -333,6 +333,109 @@ Use available_groups.json to find the JID for a group. The folder name must be c
   },
 );
 
+server.tool(
+  'propose_code_change',
+  `Propose a change to NanoClaw's source code. This tool invokes Claude Code on the host to implement the change in a git worktree, then runs build and tests.
+
+WORKFLOW:
+1. Call with dry_run=true (default) — gets a diff and build/test results without applying
+2. Show the diff to the user and explain what changed
+3. If approved, call again with dry_run=false to merge and optionally restart
+
+WHEN TO USE:
+- User requests a system-level change (new skill, integration, config change)
+- Evidence-driven capability expansion (from cycle journal analysis)
+- Installing upstream skill branches
+
+WHEN NOT TO USE:
+- Editing group files (CLAUDE.md, cycle journals) — use filesystem directly
+- Agent-runner customizations — those need container rebuild
+- Anything the user hasn't approved or that lacks evidence
+
+SAFETY:
+- Changes are built and tested before any merge
+- dry_run=true is the default — always preview first
+- One run at a time (locked)
+- All changes tracked on self-improve/* branches`,
+  {
+    prompt: z.string().describe('What to change in NanoClaw. Be specific: describe the files, the change, and why.'),
+    dry_run: z.boolean().default(true).describe('If true (default), preview the change without applying. If false, merge into main after build/test pass.'),
+    auto_restart: z.boolean().default(false).describe('If true and dry_run=false, restart the NanoClaw service after applying. Requires user approval.'),
+  },
+  async (args) => {
+    const requestId = `si-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const RESPONSES_DIR = path.join(IPC_DIR, 'responses');
+    const responseFile = path.join(RESPONSES_DIR, `${requestId}.json`);
+
+    const data = {
+      type: 'claude_code',
+      requestId,
+      prompt: args.prompt,
+      dryRun: args.dry_run,
+      autoRestart: args.auto_restart,
+      responseFile,
+      groupFolder,
+      timestamp: new Date().toISOString(),
+    };
+
+    writeIpcFile(TASKS_DIR, data);
+
+    // Poll for response (2s interval, 6 min timeout)
+    const POLL_INTERVAL = 2000;
+    const TIMEOUT = 6 * 60 * 1000;
+    const startTime = Date.now();
+
+    while (Date.now() - startTime < TIMEOUT) {
+      await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL));
+
+      try {
+        if (fs.existsSync(responseFile)) {
+          const result = JSON.parse(fs.readFileSync(responseFile, 'utf-8'));
+
+          // Clean up response file
+          try { fs.unlinkSync(responseFile); } catch { /* ignore */ }
+
+          // Format result for the agent
+          const parts: string[] = [];
+
+          if (result.status === 'success') {
+            parts.push(`✅ Self-improvement ${args.dry_run ? 'preview' : 'applied'} successfully`);
+            if (result.branch) parts.push(`Branch: ${result.branch}`);
+            if (result.filesChanged?.length) {
+              parts.push(`Files changed: ${result.filesChanged.join(', ')}`);
+            }
+            if (result.diff) {
+              parts.push(`\nDiff:\n\`\`\`\n${result.diff.slice(0, 8000)}\n\`\`\``);
+            }
+            if (result.applied) {
+              parts.push('\n🔄 Changes merged into main.');
+            } else if (!args.dry_run) {
+              parts.push('\n⚠️ Changes were not applied.');
+            }
+          } else {
+            parts.push(`❌ Self-improvement failed: ${result.error || 'Unknown error'}`);
+            if (result.buildOutput) {
+              parts.push(`\nBuild output:\n\`\`\`\n${result.buildOutput.slice(0, 2000)}\n\`\`\``);
+            }
+            if (result.testOutput) {
+              parts.push(`\nTest output:\n\`\`\`\n${result.testOutput.slice(0, 2000)}\n\`\`\``);
+            }
+          }
+
+          return { content: [{ type: 'text' as const, text: parts.join('\n') }] };
+        }
+      } catch {
+        // Response file not ready yet or parse error — keep polling
+      }
+    }
+
+    return {
+      content: [{ type: 'text' as const, text: `⏰ Timed out waiting for self-improvement result (request: ${requestId}). The operation may still be running on the host.` }],
+      isError: true,
+    };
+  },
+);
+
 // Start the stdio transport
 const transport = new StdioServerTransport();
 await server.connect(transport);

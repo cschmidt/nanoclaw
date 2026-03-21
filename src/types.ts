@@ -30,6 +30,7 @@ export interface AllowedRoot {
 export interface ContainerConfig {
   additionalMounts?: AdditionalMount[];
   timeout?: number; // Default: 300000 (5 minutes)
+  model?: string; // Claude model override (e.g., "claude-opus-4-6")
 }
 
 export interface RegisteredGroup {
@@ -40,6 +41,7 @@ export interface RegisteredGroup {
   containerConfig?: ContainerConfig;
   requiresTrigger?: boolean; // Default: true for groups, false for solo chats
   isMain?: boolean; // True for the main control group (no trigger, elevated privileges)
+  canModifySystem?: boolean; // True if this group can invoke claude_code (self-improvement)
 }
 
 export interface NewMessage {

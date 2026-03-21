@@ -24,7 +24,15 @@ RUN apt-get update && apt-get install -y \
     libxshmfence1 \
     curl \
     git \
+    python3-pip \
     && rm -rf /var/lib/apt/lists/*
+
+# Install gcalcli for Google Calendar integration
+RUN pip install --break-system-packages gcalcli
+
+# Install Google Workspace CLI for Gmail, Calendar, Drive, Sheets, Docs, Tasks
+RUN npm install -g @googleworkspace/cli
+ENV GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE=/home/node/.gws-credentials.json
 
 # Set Chromium path for agent-browser
 ENV AGENT_BROWSER_EXECUTABLE_PATH=/usr/bin/chromium
