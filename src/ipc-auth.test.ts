@@ -442,6 +442,91 @@ describe('IPC message authorization', () => {
   });
 });
 
+// --- trusted_targets authorization ---
+
+describe('trusted_targets message authorization', () => {
+  it('non-main group with trusted_targets can message trusted target', async () => {
+    const sendMessage = vi.fn().mockResolvedValue(undefined);
+    deps.sendMessage = sendMessage;
+
+    // Give other-group trusted_targets including third@g.us
+    const TRUSTED_GROUP: RegisteredGroup = {
+      name: 'Other',
+      folder: 'other-group',
+      trigger: '@Andy',
+      added_at: '2024-01-01T00:00:00.000Z',
+      trusted_targets: ['third@g.us'],
+    };
+    groups['other@g.us'] = TRUSTED_GROUP;
+    setRegisteredGroup('other@g.us', TRUSTED_GROUP);
+
+    // Use processTaskIpc with a schedule_task to third@g.us
+    await processTaskIpc(
+      {
+        type: 'schedule_task',
+        prompt: 'trusted task',
+        schedule_type: 'once',
+        schedule_value: '2025-06-01T00:00:00',
+        targetJid: 'third@g.us',
+      },
+      'other-group',
+      false,
+      deps,
+    );
+
+    const tasks = getAllTasks();
+    expect(tasks).toHaveLength(1);
+    expect(tasks[0].group_folder).toBe('third-group');
+  });
+
+  it('non-main group without trusted_targets cannot message non-own target', async () => {
+    // OTHER_GROUP has no trusted_targets (default)
+    await processTaskIpc(
+      {
+        type: 'schedule_task',
+        prompt: 'unauthorized',
+        schedule_type: 'once',
+        schedule_value: '2025-06-01T00:00:00',
+        targetJid: 'third@g.us',
+      },
+      'other-group',
+      false,
+      deps,
+    );
+
+    const tasks = getAllTasks();
+    expect(tasks).toHaveLength(0);
+  });
+
+  it('non-main group cannot message target not in trusted_targets', async () => {
+    const TRUSTED_GROUP: RegisteredGroup = {
+      name: 'Other',
+      folder: 'other-group',
+      trigger: '@Andy',
+      added_at: '2024-01-01T00:00:00.000Z',
+      trusted_targets: ['third@g.us'],
+    };
+    groups['other@g.us'] = TRUSTED_GROUP;
+    setRegisteredGroup('other@g.us', TRUSTED_GROUP);
+
+    await processTaskIpc(
+      {
+        type: 'schedule_task',
+        prompt: 'not trusted',
+        schedule_type: 'once',
+        schedule_value: '2025-06-01T00:00:00',
+        targetJid: 'main@g.us',
+      },
+      'other-group',
+      false,
+      deps,
+    );
+
+    const tasks = getAllTasks();
+    expect(tasks).toHaveLength(0);
+  });
+});
+
 // --- schedule_task with cron and interval types ---
 
 describe('schedule_task schedule types', () => {

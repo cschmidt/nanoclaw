@@ -8,6 +8,7 @@ import {
   getAllRegisteredGroups,
   getMessagesSince,
   getNewMessages,
+  getRegisteredGroup,
   getTaskById,
   setRegisteredGroup,
   storeChatMetadata,
@@ -480,5 +481,46 @@ describe('registered group isMain', () => {
     const group = groups['group@g.us'];
     expect(group).toBeDefined();
     expect(group.isMain).toBeUndefined();
+  });
+});
+
+// --- RegisteredGroup trusted_targets round-trip ---
+
+describe('registered group trusted_targets', () => {
+  it('persists trusted_targets through set/get round-trip', () => {
+    setRegisteredGroup('scout@g.us', {
+      name: 'Scout',
+      folder: 'scout',
+      trigger: '@Scout',
+      added_at: '2024-01-01T00:00:00.000Z',
+      trusted_targets: ['clara@g.us', 'main@g.us'],
+    });
+
+    const group = getRegisteredGroup('scout@g.us');
+    expect(group).toBeDefined();
+    expect(group!.trusted_targets).toEqual(['clara@g.us', 'main@g.us']);
+
+    // Also verify via getAllRegisteredGroups
+    const all = getAllRegisteredGroups();
+    expect(all['scout@g.us'].trusted_targets).toEqual([
+      'clara@g.us',
+      'main@g.us',
+    ]);
+  });
+
+  it('returns undefined trusted_targets when not set', () => {
+    setRegisteredGroup('plain@g.us', {
+      name: 'Plain',
+      folder: 'plain-group',
+      trigger: '@Andy',
+      added_at: '2024-01-01T00:00:00.000Z',
+    });
+
+    const group = getRegisteredGroup('plain@g.us');
+    expect(group).toBeDefined();
+    expect(group!.trusted_targets).toBeUndefined();
+
+    const all = getAllRegisteredGroups();
+    expect(all['plain@g.us'].trusted_targets).toBeUndefined();
   });
 });
