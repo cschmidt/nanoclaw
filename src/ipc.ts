@@ -81,9 +81,13 @@ export function startIpcWatcher(deps: IpcDeps): void {
               if (data.type === 'message' && data.chatJid && data.text) {
                 // Authorization: verify this group can send to this chatJid
                 const targetGroup = registeredGroups[data.chatJid];
+                const sourceGroupEntry = Object.values(registeredGroups).find(
+                  (g) => g.folder === sourceGroup,
+                );
                 if (
                   isMain ||
-                  (targetGroup && targetGroup.folder === sourceGroup)
+                  (targetGroup && targetGroup.folder === sourceGroup) ||
+                  sourceGroupEntry?.trusted_targets?.includes(data.chatJid)
                 ) {
                   await deps.sendMessage(data.chatJid, data.text);
                   logger.info(
@@ -210,8 +214,15 @@ export async function processTaskIpc(
 
         const targetFolder = targetGroupEntry.folder;
 
-        // Authorization: non-main groups can only schedule for themselves
-        if (!isMain && targetFolder !== sourceGroup) {
+        // Authorization: non-main groups can only schedule for themselves or trusted targets
+        const sourceEntry = Object.values(registeredGroups).find(
+          (g) => g.folder === sourceGroup,
+        );
+        if (
+          !isMain &&
+          targetFolder !== sourceGroup &&
+          !sourceEntry?.trusted_targets?.includes(targetJid)
+        ) {
           logger.warn(
             { sourceGroup, targetFolder },
             'Unauthorized schedule_task attempt blocked',
