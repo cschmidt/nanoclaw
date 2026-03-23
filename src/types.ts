@@ -42,6 +42,7 @@ export interface RegisteredGroup {
   requiresTrigger?: boolean; // Default: true for groups, false for solo chats
   isMain?: boolean; // True for the main control group (no trigger, elevated privileges)
   canModifySystem?: boolean; // True if this group can invoke claude_code (self-improvement)
+  trusted_targets?: string[]; // JIDs this group is allowed to send messages/schedule tasks to
 }
 
 export interface NewMessage {

@@ -32,6 +32,34 @@ Single Node.js process with skill-based channel system. Channels (WhatsApp, Tele
 | `/qodo-pr-resolver` | Fetch and fix Qodo PR review issues interactively or in batch |
 | `/get-qodo-rules` | Load org- and repo-level coding rules from Qodo before code tasks |
 
+## Engineering Standards
+
+These apply to all code changes, including self-improvement runs.
+
+### Before writing code
+- Read the files you're touching. Understand existing patterns before introducing new ones.
+- Check for tests: `find . -name "*.test.ts" | head -20`. If touched code has tests, your change needs coverage too.
+- Run `/get-qodo-rules` for non-trivial changes to load repo coding rules.
+
+### TypeScript
+- No `any` types without an explanatory comment.
+- Prefer explicit types over inference for function signatures.
+- Follow the import ordering and style in adjacent files.
+
+### Making changes
+- Surgical edits — change what's needed, leave surrounding code alone unless it's directly in the way.
+- Follow patterns already established in the file you're editing. Don't introduce a new abstraction when the existing pattern handles it.
+- If you notice something clearly broken or wrong in code you're touching, fix it — but keep it separate from the main change so the diff stays readable.
+
+### Validation
+- Run `npm run build` before considering a change done. TypeScript errors are failures.
+- If touching `container/Dockerfile` or `container/build.sh`, note that the container image will need a rebuild: `./container/build.sh`.
+
+### Self-improvement changes specifically
+- Prefer the smallest diff that solves the problem. This is not the place for opportunistic refactoring.
+- Group config files under `groups/` are gitignored — changes there require manual copy by Carl. Document this if your change affects them.
+- When adding host mounts in `container-runner.ts`, use `os.homedir()` not `process.env.HOME`.
+
 ## Development
 
 Run commands directly—don't tell the user to run them.

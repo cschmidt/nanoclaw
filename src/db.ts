@@ -128,6 +128,15 @@ function createSchema(database: Database.Database): void {
     /* column already exists */
   }
 
+  // Add trusted_targets column if it doesn't exist (migration for existing DBs)
+  try {
+    database.exec(
+      `ALTER TABLE registered_groups ADD COLUMN trusted_targets TEXT`,
+    );
+  } catch {
+    /* column already exists */
+  }
+
   // Add channel and is_group columns if they don't exist (migration for existing DBs)
   try {
     database.exec(`ALTER TABLE chats ADD COLUMN channel TEXT`);
@@ -564,6 +573,7 @@ export function getRegisteredGroup(
         requires_trigger: number | null;
         is_main: number | null;
         can_modify_system: number | null;
+        trusted_targets: string | null;
       }
     | undefined;
   if (!row) return undefined;
@@ -587,6 +597,9 @@ export function getRegisteredGroup(
       row.requires_trigger === null ? undefined : row.requires_trigger === 1,
     isMain: row.is_main === 1 ? true : undefined,
     canModifySystem: row.can_modify_system === 1 ? true : undefined,
+    trusted_targets: row.trusted_targets
+      ? JSON.parse(row.trusted_targets)
+      : undefined,
   };
 }
 
@@ -612,8 +625,8 @@ export function setRegisteredGroup(jid: string, group: RegisteredGroup): void {
   }
 
   db.prepare(
-    `INSERT OR REPLACE INTO registered_groups (jid, name, folder, trigger_pattern, added_at, container_config, requires_trigger, is_main, can_modify_system)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT OR REPLACE INTO registered_groups (jid, name, folder, trigger_pattern, added_at, container_config, requires_trigger, is_main, can_modify_system, trusted_targets)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     jid,
     group.name,
@@ -624,6 +637,7 @@ export function setRegisteredGroup(jid: string, group: RegisteredGroup): void {
     group.requiresTrigger === undefined ? 1 : group.requiresTrigger ? 1 : 0,
     group.isMain ? 1 : 0,
     group.canModifySystem ? 1 : 0,
+    group.trusted_targets ? JSON.stringify(group.trusted_targets) : null,
   );
 }
 
@@ -638,6 +652,7 @@ export function getAllRegisteredGroups(): Record<string, RegisteredGroup> {
     requires_trigger: number | null;
     is_main: number | null;
     can_modify_system: number | null;
+    trusted_targets: string | null;
   }>;
   const result: Record<string, RegisteredGroup> = {};
   for (const row of rows) {
@@ -660,6 +675,9 @@ export function getAllRegisteredGroups(): Record<string, RegisteredGroup> {
         row.requires_trigger === null ? undefined : row.requires_trigger === 1,
       isMain: row.is_main === 1 ? true : undefined,
       canModifySystem: row.can_modify_system === 1 ? true : undefined,
+      trusted_targets: row.trusted_targets
+        ? JSON.parse(row.trusted_targets)
+        : undefined,
     };
   }
   return result;
