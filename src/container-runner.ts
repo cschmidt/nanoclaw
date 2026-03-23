@@ -220,6 +220,16 @@ function buildVolumeMounts(
     });
   }
 
+  // Mount TickTick OAuth credentials so agents can manage tasks
+  const ticktickCredentials = path.join(os.homedir(), '.ticktick-credentials.json');
+  if (fs.existsSync(ticktickCredentials)) {
+    mounts.push({
+      hostPath: ticktickCredentials,
+      containerPath: '/home/node/.ticktick-credentials.json',
+      readonly: false,
+    });
+  }
+
   // Additional mounts validated against external allowlist (tamper-proof from containers)
   if (group.containerConfig?.additionalMounts) {
     const validatedMounts = validateAdditionalMounts(
